@@ -259,7 +259,7 @@ def main(node):
             # attachment obsoletion
             elif (change['field_name'] == 'attachments.isobsolete'
                     and change['added'] == '1'):
-                attachment = find_attachment(change['attachment_id'])
+                attachment = find_attachment(stats, change['attachment_id'])
                 if not attachment:
                     raise Exception(f'attach {change["attachment_id"]}')
                 attachment['status'].append(dict(
