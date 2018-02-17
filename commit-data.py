@@ -27,7 +27,7 @@ def http_get(url, name, is_json=True):
             else:
                 return f.read()
     with open(cache_file, 'w') as f:
-        print(f'fetching {url}')
+        print(f'fetching {url}', file=sys.stderr)
         if is_json:
             content = json.load(urlopen(url))
             json.dump(content, f, indent=2, sort_keys=True)
@@ -309,7 +309,7 @@ except KeyboardInterrupt:
 except Exception as e:
     if os.getenv('DEBUG'):
         raise
-    print(e)
+    print(e, file=sys.stderr)
 
 # hg data
 # https://hg.mozilla.org/mozilla-central/json-rev/c2e41df3f41f
