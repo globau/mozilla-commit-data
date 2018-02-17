@@ -194,6 +194,8 @@ def main(node):
         assigned_to=[],
         status=[],
         flags=[],
+
+        triaged=[],
     )
 
     stats['people'].append(dict(user=bug['creator'], rel='reporter'))
@@ -232,26 +234,25 @@ def main(node):
                                             rel='assigned bug'))
 
             # triage (look for status-flags changed, or a component change)
-            if 'triaged' not in stats:
-                if (change['field_name'].startswith('cf_status_firefox')
-                        and change['added'] != '---'):
-                    stats['triaged'] = dict(
-                        user=change_group['who'],
-                        action=f'{change["field_name"]}: {change["added"]}',
-                        timestamp=change_group['when'],
-                    )
-                    stats['people'].append(dict(user=change_group['who'],
-                                                rel='triaged'))
+            if (change['field_name'].startswith('cf_status_firefox')
+                    and change['added'] != '---'):
+                stats['triaged'].append(dict(
+                    user=change_group['who'],
+                    action=f'{change["field_name"]}: {change["added"]}',
+                    timestamp=change_group['when'],
+                ))
+                stats['people'].append(dict(user=change_group['who'],
+                                            rel='triaged'))
 
-                elif (change['field_name'] == 'component'
-                      and change['removed'] == 'Untriaged'):
-                    stats['triaged'] = dict(
-                        user=change_group['who'],
-                        action=f'{change["field_name"]} -> {change["added"]}',
-                        timestamp=change_group['when'],
-                    )
-                    stats['people'].append(dict(user=change_group['who'],
-                                                rel='triaged'))
+            elif (change['field_name'] == 'component'
+                  and change['removed'] == 'Untriaged'):
+                stats['triaged'].append(dict(
+                    user=change_group['who'],
+                    action=f'{change["field_name"]} -> {change["added"]}',
+                    timestamp=change_group['when'],
+                ))
+                stats['people'].append(dict(user=change_group['who'],
+                                            rel='triaged'))
 
             # reviews
             if change['field_name'] == 'flagtypes.name':
