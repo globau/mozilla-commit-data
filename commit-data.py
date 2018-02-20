@@ -21,12 +21,12 @@ if not os.path.exists(cache_path):
 def http_get(url, name, is_json=True):
     cache_file = os.path.join(cache_path, name)
     if os.path.exists(cache_file):
-        with open(cache_file) as f:
+        with open(cache_file, encoding='utf-8') as f:
             if is_json:
                 return json.load(f)
             else:
                 return f.read()
-    with open(cache_file, 'w') as f:
+    with open(cache_file, 'w', encoding='utf-8') as f:
         print(f'fetching {url}', file=sys.stderr)
         if is_json:
             content = json.load(urlopen(url))
