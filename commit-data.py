@@ -121,6 +121,21 @@ def add_bug_flag(stats, change_group, change, flagtype):
             stats['people'].append(dict(user=change_group['who'],
                                         rel=f'{flagtype} requestee'))
 
+    for flag in change['removed'].split(','):
+        flag = flag.strip()
+
+        if flag.startswith(f'{flagtype}?('):
+            requestee = flag[len(f'{flagtype}?('):-1]
+            flag = dict(
+                status=f'{flagtype}X',
+                requestee=requestee,
+                timestamp=change_group['when'],
+            )
+            if requestee != change_group['who']:
+                flag['actor'] = change_group['who']
+            stats['flags'].append(flag)
+            stats['people'].append(dict(user=change_group['who'],
+                                        rel=f'{flagtype} requestee'))
 
 # noinspection PyTypeChecker
 def main(node):
