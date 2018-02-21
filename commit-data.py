@@ -190,6 +190,7 @@ def main(node):
     stats = dict(
         bug_url=f'https://bugzilla.mozilla.org/{bug_id}',
         hg_url=f'https://hg.mozilla.org/mozilla-central/rev/{rev["node"][:12]}',
+        summary=rev['summary'],
 
         node=rev['node'],
         author=rev['user'],
