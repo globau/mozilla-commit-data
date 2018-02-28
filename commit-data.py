@@ -53,9 +53,14 @@ def find_attachment(stats, attach_id):
 
 
 def is_patch(attachment):
-    return (attachment['is_patch'] == 1 or
-            attachment['content_type'] == 'text/x-review-board-request' or
-            attachment['content_type'] == 'text/x-github-request')
+    return (
+        attachment['is_patch'] == 1 or
+        attachment['content_type'] in (
+            'text/x-review-board-request',
+            'text/x-github-request',
+            'text/x-phabricator-request',
+        )
+    )
 
 
 def add_attachment_flag(stats, change_group, change, flagtype):
@@ -68,7 +73,8 @@ def add_attachment_flag(stats, change_group, change, flagtype):
         if flag.startswith(f'{flagtype}?('):
             attachment = find_attachment(stats, change['attachment_id'])
             if not attachment:
-                raise Exception(f'attach {change["attachment_id"]}')
+                raise Exception(f'attachment {change["attachment_id"]} '
+                                'not found')
             requestee = flag[len(f'{flagtype}?('):-1]
             attachment['status'].append(dict(
                 status=f'{flagtype}?',
@@ -83,7 +89,8 @@ def add_attachment_flag(stats, change_group, change, flagtype):
         elif flag == f'{flagtype}+' or flag == f'{flagtype}-':
             attachment = find_attachment(stats, change['attachment_id'])
             if not attachment:
-                raise Exception(f'attach {change["attachment_id"]}')
+                raise Exception(f'attachment {change["attachment_id"]}'
+                                'not found')
             attachment['status'].append(dict(
                 status=flag,
                 requestee=change_group['who'],
