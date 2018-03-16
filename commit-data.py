@@ -288,13 +288,17 @@ def main(node):
                 add_bug_flag(stats, change_group, change, 'needinfo')
 
             # attachment obsoletion
-            elif (change['field_name'] == 'attachments.isobsolete'
-                    and change['added'] == '1'):
+            elif change['field_name'] == 'attachments.isobsolete':
+                if change['added'] == '1':
+                    status = 'obsoleted'
+                else:
+                    status = 'unobsoleted'
+
                 attachment = find_attachment(stats, change['attachment_id'])
                 if not attachment:
                     raise Exception(f'attach {change["attachment_id"]}')
                 attachment['status'].append(dict(
-                    status='obsoleted',
+                    status=status,
                     timestamp=change_group['when'],
                 ))
                 stats['people'].append(dict(user=change_group['who'],
