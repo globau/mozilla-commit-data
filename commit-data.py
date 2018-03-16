@@ -196,6 +196,9 @@ def main(node):
 
     stats = dict(
         bug_url=f'https://bugzilla.mozilla.org/{bug_id}',
+        bug_comment_count=bug['comment_count'],
+        bug_product=bug['product'],
+        bug_component=bug['component'],
         hg_url=f'https://hg.mozilla.org/mozilla-central/rev/{rev["node"][:12]}',
         summary=rev['summary'],
 
@@ -238,6 +241,7 @@ def main(node):
         if not is_patch(attachment):
             continue
         stats['patches'].append(dict(
+            content_type=attachment['content_type'],
             id=attachment['id'],
             timestamp=attachment['creation_time'],
             user=attachment['creator'],
