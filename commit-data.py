@@ -13,6 +13,8 @@ import sys
 from email.utils import parseaddr
 from urllib.request import urlopen
 
+from mozautomation import commitparser
+
 cache_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'cache')
 if not os.path.exists(cache_path):
     os.mkdir(cache_path)
@@ -313,6 +315,45 @@ def main(node):
                 ))
                 stats['people'].append(dict(user=change_group['who'],
                                             rel='bug status'))
+
+    # see if we can identify the attachment that landed
+    # this is fairly naive, comparing patch summaries to the commit summary.
+    # this could be improved in a few ways, such as by looking at push
+    # comments and presuming that the order of attachments is the same.
+    # however, it is nearly impossible to be sure, so we'll just do a best
+    # attempt here, generally avoiding false positives.
+
+    landed_patch = None
+    active_patches = []
+
+    # go backwards through attachment statuses.  if we most recently
+    # unobsoleted it, or we never obsoleted nor unobsoleted it, then it is
+    # considered active.
+    for patch in stats['patches']:
+        for patch_status in reversed(patch['status']):
+            if patch_status['status'] == 'unobsoleted':
+                active_patches.append(patch)
+                break
+            if patch_status['status'] == 'obsoleted':
+                break
+        else:
+            active_patches.append(patch)
+
+    if len(active_patches) == 1:
+        # *presume* this is the landed attachment
+        landed_patch = active_patches[0]
+    else:
+        summary_base = commitparser.replace_reviewers(stats['summary'], None)
+        for patch in active_patches:
+            if (commitparser.replace_reviewers(patch['summary'], None) ==
+                    summary_base):
+                landed_patch = patch
+                break
+
+    if landed_patch:
+        stats['landed_attachment_id'] = landed_patch['id']
+    else:
+        print(f'could not determine landed patch', file=sys.stderr)
 
     # tidy up
     people = {}

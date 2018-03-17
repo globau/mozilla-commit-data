@@ -1,0 +1,1 @@
+mozautomation==0.2
