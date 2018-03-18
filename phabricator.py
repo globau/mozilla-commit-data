@@ -28,12 +28,15 @@ class Revision:
 
         self.base_url = f'{parts.scheme}://{parts.netloc}'
 
+    def _call_conduit(self, api_name, cache_name, data):
+        request_data = data.copy()
+        request_data['api.token'] = api_token
+        return http_get(f'{self.base_url}/api/{api_name}', cache_name,
+                        data=request_data)
+
     def phid(self):
-        return http_get(
-            f'{self.base_url}/api/differential.revision.search',
+        return self._call_conduit(
+            'differential.revision.search',
             f'phid-{self.revision_id}',
-            data={
-                'constraints[ids][0]': self.revision_id,
-                'api.token': api_token,
-            }
+            {'constraints[ids][0]': self.revision_id}
         )['result']['data'][0]['phid']
