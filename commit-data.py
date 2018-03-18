@@ -146,6 +146,7 @@ def add_bug_flag(stats, change_group, change, flagtype):
             stats['people'].append(dict(user=change_group['who'],
                                         rel=f'{flagtype} requestee'))
 
+
 # noinspection PyTypeChecker
 def main(node):
     # hg
@@ -201,7 +202,7 @@ def main(node):
         bug_comment_count=bug['comment_count'],
         bug_product=bug['product'],
         bug_component=bug['component'],
-        hg_url=f'https://hg.mozilla.org/mozilla-central/rev/{rev["node"][:12]}',
+        hg_url=f'https://hg.mozilla.org/mozilla-central/rev/{rev["node"]}',
         summary=rev['summary'],
 
         node=rev['node'],
@@ -237,7 +238,8 @@ def main(node):
             timestamp=datetime.datetime.fromtimestamp(
                 backout['pushdate'][0]).strftime('%Y-%m-%dT%H:%M:%SZ'),
         )
-        stats['people'].append(dict(user=backout['user'], rel='backout author'))
+        stats['people'].append(dict(user=backout['user'],
+                                    rel='backout author'))
 
     for attachment in bug_attachments:
         if not is_patch(attachment):
