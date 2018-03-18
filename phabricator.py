@@ -44,3 +44,10 @@ class Revision:
                 {'constraints[ids][0]': self.revision_id}
             )['result']['data'][0]['phid']
         return self._phid
+
+    def diffs(self):
+        return self._call_conduit(
+            'differential.diff.search',
+            f'diffs-{self.revision_id}',
+            {'constraints[revisionPHIDs][0]': self.phid}
+        )['result']['data']
