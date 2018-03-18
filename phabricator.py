@@ -18,6 +18,7 @@ if not api_token:
 class Revision:
 
     def __init__(self, revision_url):
+        self._phid = None
         parts = urllib.parse.urlparse(revision_url)
 
         try:
@@ -34,9 +35,12 @@ class Revision:
         return http_get(f'{self.base_url}/api/{api_name}', cache_name,
                         data=request_data)
 
+    @property
     def phid(self):
-        return self._call_conduit(
-            'differential.revision.search',
-            f'phid-{self.revision_id}',
-            {'constraints[ids][0]': self.revision_id}
-        )['result']['data'][0]['phid']
+        if not self._phid:
+            self._phid = self._call_conduit(
+                'differential.revision.search',
+                f'phid-{self.revision_id}',
+                {'constraints[ids][0]': self.revision_id}
+            )['result']['data'][0]['phid']
+        return self._phid
