@@ -17,6 +17,10 @@ from mozautomation import commitparser
 
 from network import http_get
 
+ATTACHMENT_TYPE_MOZREVIEW = 'text/x-review-board-request'
+ATTACHMENT_TYPE_GITHUB = 'text/x-github-request'
+ATTACHMENT_TYPE_PHABRICATOR = 'text/x-phabricator-request'
+
 
 def parse_bugs(s):
     bug_re = re.compile(
@@ -37,9 +41,9 @@ def is_patch(attachment):
     return (
         attachment['is_patch'] == 1 or
         attachment['content_type'] in (
-            'text/x-review-board-request',
-            'text/x-github-request',
-            'text/x-phabricator-request',
+            ATTACHMENT_TYPE_MOZREVIEW,
+            ATTACHMENT_TYPE_GITHUB,
+            ATTACHMENT_TYPE_PHABRICATOR,
         )
     )
 
