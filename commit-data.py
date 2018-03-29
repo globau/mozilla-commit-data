@@ -363,10 +363,6 @@ try:
         main(rev_arg)
 except KeyboardInterrupt:
     pass
-except Exception as e:
-    if os.getenv('DEBUG'):
-        raise
-    print(e, file=sys.stderr)
 
 # hg data
 # https://hg.mozilla.org/mozilla-central/json-rev/c2e41df3f41f
