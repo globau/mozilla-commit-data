@@ -5,6 +5,7 @@
 
 # quick-n-dirty script to consolidate data about a given mozilla-central commit
 
+import base64
 import datetime
 import json
 import re
@@ -14,6 +15,7 @@ from email.utils import parseaddr
 from mozautomation import commitparser
 
 from network import http_get
+from phabricator import Revision
 
 ATTACHMENT_TYPE_MOZREVIEW = 'text/x-review-board-request'
 ATTACHMENT_TYPE_GITHUB = 'text/x-github-request'
@@ -225,14 +227,31 @@ def main(node):
     for attachment in bug_attachments:
         if not is_patch(attachment):
             continue
-        stats['patches'].append(dict(
+        patch_data = dict(
             content_type=attachment['content_type'],
             id=attachment['id'],
             timestamp=attachment['creation_time'],
             user=attachment['creator'],
             summary=attachment['summary'],
             status=[],
-        ))
+        )
+
+        if patch_data['content_type'] == ATTACHMENT_TYPE_PHABRICATOR:
+            rev_url = base64.b64decode(
+                http_get(
+                    f'{bmo}/bug/attachment/{patch_data["id"]}'
+                    '?include_fields=data',
+                    f'{patch_data["id"]}-attachment-data',
+                )['attachments'][str(patch_data['id'])]['data']
+            ).decode()
+            revision = Revision(rev_url)
+            patch_data['revision'] = dict(
+                url=rev_url,
+                phid=revision.phid,
+                diffs=revision.diffs(),
+            )
+
+        stats['patches'].append(patch_data)
         stats['people'].append(dict(user=attachment['creator'],
                                     rel='patch author'))
 
