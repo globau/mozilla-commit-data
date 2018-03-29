@@ -7,11 +7,9 @@
 
 import datetime
 import json
-import os
 import re
 import sys
 from email.utils import parseaddr
-from urllib.request import urlopen
 
 from mozautomation import commitparser
 
