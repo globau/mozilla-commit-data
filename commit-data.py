@@ -22,12 +22,12 @@ ATTACHMENT_TYPE_GITHUB = 'text/x-github-request'
 ATTACHMENT_TYPE_PHABRICATOR = 'text/x-phabricator-request'
 
 
-def parse_bugs(s):
-    bug_re = re.compile(
+def parse_bug_ids(s):
+    bug_id_re = re.compile(
         r'((?:bug|(?=\b#?\d{5,})|^(?=\d))(?:\s*#?)(\d+)(?=\b))', re.I)
-    bugs_with_duplicates = [int(m[1]) for m in bug_re.findall(s)]
-    bugs = list(set(bugs_with_duplicates))
-    return [bug for bug in bugs if bug < 100000000]
+    bug_ids_with_duplicates = [int(m[1]) for m in bug_id_re.findall(s)]
+    bug_ids = list(set(bug_ids_with_duplicates))
+    return [bug_id for bug_id in bug_ids if bug_id < 100000000]
 
 
 def find_attachment(stats, attach_id):
@@ -155,12 +155,12 @@ def main(node):
         f'{node}-patch', is_json=False)
 
     # bug-id
-    bugs = parse_bugs(rev['summary'])
-    if len(bugs) == 0:
+    bug_ids = parse_bug_ids(rev['summary'])
+    if len(bug_ids) == 0:
         raise Exception(f'failed to find bug-id in: {rev["summary"]}')
-    if len(bugs) > 1:
+    if len(bug_ids) > 1:
         raise Exception(f'found multiple bug-ids in: {rev["summary"]}')
-    bug_id = bugs[0]
+    bug_id = bug_ids[0]
 
     # bug - meta
     bmo = 'https://bugzilla.mozilla.org/rest'
