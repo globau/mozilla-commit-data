@@ -21,6 +21,9 @@ ATTACHMENT_TYPE_MOZREVIEW = 'text/x-review-board-request'
 ATTACHMENT_TYPE_GITHUB = 'text/x-github-request'
 ATTACHMENT_TYPE_PHABRICATOR = 'text/x-phabricator-request'
 
+bugs = {}
+commits = {}
+
 
 def parse_bug_ids(s):
     bug_id_re = re.compile(
@@ -178,29 +181,151 @@ def main(node):
         raise Exception(f'found multiple bug-ids in: {rev["summary"]}')
     bug_id = bug_ids[0]
 
-    # bug - meta
-    bmo = 'https://bugzilla.mozilla.org/rest'
-    bug = http_get(
-        f'{bmo}/bug/{bug_id}',
-        f'{node}-bug')['bugs'][0]
+    if bug_id not in bugs:
+        # bug - meta
+        bmo = 'https://bugzilla.mozilla.org/rest'
+        bug = http_get(
+            f'{bmo}/bug/{bug_id}',
+            f'{node}-bug')['bugs'][0]
 
-    # bug - history
-    bug_history = http_get(
-        f'{bmo}/bug/{bug_id}/history',
-        f'{node}-bug_history')['bugs'][0]['history']
+        # bug - history
+        bug_history = http_get(
+            f'{bmo}/bug/{bug_id}/history',
+            f'{node}-bug_history')['bugs'][0]['history']
 
-    # bug - attachments
-    bug_attachments = list(http_get(
-        f'{bmo}/bug/{bug_id}/attachment?exclude_fields=data',
-        f'{node}-bug-attachments')['bugs'][str(bug_id)])
+        # bug - attachments
+        bug_attachments = list(http_get(
+            f'{bmo}/bug/{bug_id}/attachment?exclude_fields=data',
+            f'{node}-bug-attachments')['bugs'][str(bug_id)])
+
+        bug_data = dict(
+            id=bug_id,
+            url=f'https://bugzilla.mozilla.org/{bug_id}',
+            creator=bug['creator'],
+            comment_count=bug['comment_count'],
+            product=bug['product'],
+            component=bug['component'],
+            bug_created_timestamp=bug['creation_time'],
+            patches=[],
+
+            assigned_to=[],
+            status=[],
+            flags=[],
+
+            triaged=[],
+
+            people=[],
+        )
+
+        people = [dict(user=bug['creator'], rel='reporter')]
+
+        for attachment in bug_attachments:
+            if not is_patch(attachment):
+                continue
+
+            patch_data = dict(
+                content_type=attachment['content_type'],
+                id=attachment['id'],
+                timestamp=attachment['creation_time'],
+                user=attachment['creator'],
+                summary=attachment['summary'],
+                status=[],
+            )
+
+            if patch_data['content_type'] == ATTACHMENT_TYPE_PHABRICATOR:
+                rev_url = base64.b64decode(
+                    http_get(
+                        f'{bmo}/bug/attachment/{patch_data["id"]}'
+                        '?include_fields=data',
+                        f'{patch_data["id"]}-attachment-data',
+                    )['attachments'][str(patch_data['id'])]['data']
+                ).decode()
+                revision = Revision(rev_url)
+                patch_data['revision'] = dict(
+                    url=rev_url,
+                    phid=revision.phid,
+                    diffs=revision.diffs(),
+                )
+
+            bug_data['patches'].append(patch_data)
+            people.append(dict(user=attachment['creator'],
+                               rel='patch author'))
+
+        for change_group in bug_history:
+            for change in change_group['changes']:
+                # assigned_to
+                if change['field_name'] == 'assigned_to':
+                    bug_data['assigned_to'].append(dict(
+                        user=change['added'],
+                        when=change_group['when']
+                    ))
+                    people.append(dict(user=change['added'],
+                                       rel='assigned bug'))
+
+                # triage (look for status-flags changed, or a component change)
+                if (change['field_name'].startswith('cf_status_firefox')
+                        and change['added'] != '---'):
+                    bug_data['triaged'].append(dict(
+                        user=change_group['who'],
+                        action=f'{change["field_name"]}: {change["added"]}',
+                        timestamp=change_group['when'],
+                    ))
+                    people.append(dict(user=change_group['who'],
+                                       rel='triaged'))
+
+                elif (change['field_name'] == 'component'
+                      and change['removed'] == 'Untriaged'):
+                    bug_data['triaged'].append(dict(
+                        user=change_group['who'],
+                        action=f'{change["field_name"]} -> {change["added"]}',
+                        timestamp=change_group['when'],
+                    ))
+                    people.append(dict(user=change_group['who'],
+                                       rel='triaged'))
+
+                # reviews
+                if change['field_name'] == 'flagtypes.name':
+                    add_attachment_flag(bug_data, change_group, change,
+                                        'review')
+                    add_attachment_flag(bug_data, change_group, change,
+                                        'feedback')
+                    add_bug_flag(bug_data, change_group, change, 'needinfo')
+
+                # attachment obsoletion
+                elif change['field_name'] == 'attachments.isobsolete':
+                    if change['added'] == '1':
+                        status = 'obsoleted'
+                    else:
+                        status = 'unobsoleted'
+
+                    attachment = find_attachment(bug_data,
+                                                 change['attachment_id'])
+                    if not attachment:
+                        raise Exception(f'attach {change["attachment_id"]}')
+                    attachment['status'].append(dict(
+                        status=status,
+                        timestamp=change_group['when'],
+                    ))
+                    people.append(dict(user=change_group['who'],
+                                       rel='obsoleted attachment'))
+
+                # status
+                elif change['field_name'] == 'status':
+                    bug_data['status'].append(dict(
+                        status=change['added'],
+                        user=change_group['who'],
+                        timestamp=change_group['when'],
+                    ))
+                    people.append(dict(user=change_group['who'],
+                                       rel='bug status'))
+
+
+        bug_data['people'] = normalize_people(people)
+        bugs[bug_id] = bug_data
 
     # calc stats
 
     stats = dict(
-        bug_url=f'https://bugzilla.mozilla.org/{bug_id}',
-        bug_comment_count=bug['comment_count'],
-        bug_product=bug['product'],
-        bug_component=bug['component'],
         hg_url=f'https://hg.mozilla.org/mozilla-central/rev/{rev["node"]}',
         summary=rev['summary'],
 
@@ -217,16 +342,8 @@ def main(node):
             rev['pushdate'][0]).strftime('%Y-%m-%dT%H:%M:%SZ'),
 
         bug_id=bug_id,
-        bug_created_timestamp=bug['creation_time'],
-
-        assigned_to=[],
-        status=[],
-        flags=[],
-
-        triaged=[],
     )
 
-    stats['people'].append(dict(user=bug['creator'], rel='reporter'))
     stats['people'].append(dict(user=rev['user'], rel='push author'))
     stats['people'].append(dict(user=rev['pushuser'], rel='push user'))
 
@@ -239,100 +356,6 @@ def main(node):
         )
         stats['people'].append(dict(user=backout['user'],
                                     rel='backout author'))
-
-    for attachment in bug_attachments:
-        if not is_patch(attachment):
-            continue
-        patch_data = dict(
-            content_type=attachment['content_type'],
-            id=attachment['id'],
-            timestamp=attachment['creation_time'],
-            user=attachment['creator'],
-            summary=attachment['summary'],
-            status=[],
-        )
-
-        if patch_data['content_type'] == ATTACHMENT_TYPE_PHABRICATOR:
-            rev_url = base64.b64decode(
-                http_get(
-                    f'{bmo}/bug/attachment/{patch_data["id"]}'
-                    '?include_fields=data',
-                    f'{patch_data["id"]}-attachment-data',
-                )['attachments'][str(patch_data['id'])]['data']
-            ).decode()
-            revision = Revision(rev_url)
-            patch_data['revision'] = dict(
-                url=rev_url,
-                phid=revision.phid,
-                diffs=revision.diffs(),
-            )
-
-        stats['patches'].append(patch_data)
-        stats['people'].append(dict(user=attachment['creator'],
-                                    rel='patch author'))
-
-    for change_group in bug_history:
-        for change in change_group['changes']:
-            # assigned_to
-            if change['field_name'] == 'assigned_to':
-                stats['assigned_to'].append(dict(user=change['added'],
-                                                 when=change_group['when']))
-                stats['people'].append(dict(user=change['added'],
-                                            rel='assigned bug'))
-
-            # triage (look for status-flags changed, or a component change)
-            if (change['field_name'].startswith('cf_status_firefox')
-                    and change['added'] != '---'):
-                stats['triaged'].append(dict(
-                    user=change_group['who'],
-                    action=f'{change["field_name"]}: {change["added"]}',
-                    timestamp=change_group['when'],
-                ))
-                stats['people'].append(dict(user=change_group['who'],
-                                            rel='triaged'))
-
-            elif (change['field_name'] == 'component'
-                  and change['removed'] == 'Untriaged'):
-                stats['triaged'].append(dict(
-                    user=change_group['who'],
-                    action=f'{change["field_name"]} -> {change["added"]}',
-                    timestamp=change_group['when'],
-                ))
-                stats['people'].append(dict(user=change_group['who'],
-                                            rel='triaged'))
-
-            # reviews
-            if change['field_name'] == 'flagtypes.name':
-                add_attachment_flag(stats, change_group, change, 'review')
-                add_attachment_flag(stats, change_group, change, 'feedback')
-                add_bug_flag(stats, change_group, change, 'needinfo')
-
-            # attachment obsoletion
-            elif change['field_name'] == 'attachments.isobsolete':
-                if change['added'] == '1':
-                    status = 'obsoleted'
-                else:
-                    status = 'unobsoleted'
-
-                attachment = find_attachment(stats, change['attachment_id'])
-                if not attachment:
-                    raise Exception(f'attach {change["attachment_id"]}')
-                attachment['status'].append(dict(
-                    status=status,
-                    timestamp=change_group['when'],
-                ))
-                stats['people'].append(dict(user=change_group['who'],
-                                            rel='obsoleted attachment'))
-
-            # status
-            elif change['field_name'] == 'status':
-                stats['status'].append(dict(
-                    status=change['added'],
-                    user=change_group['who'],
-                    timestamp=change_group['when'],
-                ))
-                stats['people'].append(dict(user=change_group['who'],
-                                            rel='bug status'))
 
     # see if we can identify the attachment that landed
     # this is fairly naive, comparing patch summaries to the commit summary.
@@ -347,7 +370,7 @@ def main(node):
     # go backwards through attachment statuses.  if we most recently
     # unobsoleted it, or we never obsoleted nor unobsoleted it, then it is
     # considered active.
-    for patch in stats['patches']:
+    for patch in bugs[bug_id]['patches']:
         for patch_status in reversed(patch['status']):
             if patch_status['status'] == 'unobsoleted':
                 active_patches.append(patch)
@@ -376,8 +399,11 @@ def main(node):
     # tidy up
     stats['people'] = normalize_people(stats['people'])
 
+    commits[stats['node']] = stats
+
     # display
-    print(json.dumps(stats, indent=2, sort_keys=True))
+    print(json.dumps({'commits': commits, 'bugs': bugs}, indent=2,
+                     sort_keys=True))
 
 
 try:
