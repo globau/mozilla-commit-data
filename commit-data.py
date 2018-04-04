@@ -150,7 +150,7 @@ def normalize_people(people):
 
 
 # noinspection PyTypeChecker
-def main(node):
+def get_commit_data(node):
     # hg
     rev = http_get(
         f'https://hg.mozilla.org/mozilla-central/json-rev/{node}',
@@ -401,18 +401,23 @@ def main(node):
 
     commits[stats['node']] = stats
 
-    # display
+
+def main(revs):
+    try:
+        for rev in revs:
+            get_commit_data(rev)
+    except KeyboardInterrupt:
+        pass
+
     print(json.dumps({'commits': commits, 'bugs': bugs}, indent=2,
                      sort_keys=True))
 
 
-try:
+if __name__ == '__main__':
     if len(sys.argv) == 1:
-        raise Exception('syntax: commit-data.py <rev>[..]')
-    for rev_arg in sys.argv[1:]:
-        main(rev_arg)
-except KeyboardInterrupt:
-    pass
+        raise Exception('syntax: commit-data.py <rev> [...]')
+
+    main(sys.argv[1:])
 
 # hg data
 # https://hg.mozilla.org/mozilla-central/json-rev/c2e41df3f41f
