@@ -130,6 +130,22 @@ def add_bug_flag(stats, change_group, change, flagtype):
                                         rel=f'{flagtype} requestee'))
 
 
+def normalize_people(people):
+    people_rel_bits = {}
+    for person in people:
+        user = person['user']
+        rel = person['rel']
+        if user not in people_rel_bits:
+            people_rel_bits[user] = dict(user=user, rel={})
+        people_rel_bits[user]['rel'][rel] = True
+
+    norm_people = {}
+    for person in people_rel_bits.values():
+        norm_people[person['user']] = sorted(list(set(person['rel'])))
+
+    return norm_people
+
+
 # noinspection PyTypeChecker
 def main(node):
     # hg
@@ -358,16 +374,7 @@ def main(node):
         print(f'could not determine landed patch', file=sys.stderr)
 
     # tidy up
-    people = {}
-    for person in stats['people']:
-        user = person['user']
-        rel = person['rel']
-        if person['user'] not in people:
-            people[user] = dict(user=user, rel={})
-        people[user]['rel'][rel] = True
-    stats['people'] = {}
-    for person in people.values():
-        stats['people'][person['user']] = sorted(list(set(person['rel'])))
+    stats['people'] = normalize_people(stats['people'])
 
     # display
     print(json.dumps(stats, indent=2, sort_keys=True))
