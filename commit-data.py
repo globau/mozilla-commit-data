@@ -183,6 +183,7 @@ def get_bug(bug_id, node):
         triaged=[],
 
         people=[],
+        commits=[],
     )
 
     people = [dict(user=bug['creator'], rel='reporter')]
@@ -382,6 +383,7 @@ def get_commit_data(node):
     stats['people'] = normalize_people(stats['people'])
 
     commits[stats['node']] = stats
+    bugs[bug_id]['commits'].append(stats['node'])
 
 
 def main(revs):
