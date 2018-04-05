@@ -12,14 +12,17 @@ import re
 import sys
 from email.utils import parseaddr
 
-from mozautomation import commitparser
-
 from network import http_get
 from phabricator import Revision
 
 ATTACHMENT_TYPE_MOZREVIEW = 'text/x-review-board-request'
 ATTACHMENT_TYPE_GITHUB = 'text/x-github-request'
 ATTACHMENT_TYPE_PHABRICATOR = 'text/x-phabricator-request'
+
+
+class CommitException(Exception):
+    pass
+
 
 bugs = {}
 commits = {}
@@ -61,8 +64,8 @@ def add_attachment_flag(stats, change_group, change, flagtype):
         if flag.startswith(f'{flagtype}?('):
             attachment = find_attachment(stats, change['attachment_id'])
             if not attachment:
-                raise Exception(f'attachment {change["attachment_id"]} '
-                                'not found')
+                raise CommitException(f'attachment {change["attachment_id"]} '
+                                      'not found')
             requestee = flag[len(f'{flagtype}?('):-1]
             attachment['status'].append(dict(
                 status=f'{flagtype}?',
@@ -77,8 +80,8 @@ def add_attachment_flag(stats, change_group, change, flagtype):
         elif flag == f'{flagtype}+' or flag == f'{flagtype}-':
             attachment = find_attachment(stats, change['attachment_id'])
             if not attachment:
-                raise Exception(f'attachment {change["attachment_id"]}'
-                                'not found')
+                raise CommitException(f'attachment {change["attachment_id"]}'
+                                      'not found')
             attachment['status'].append(dict(
                 status=flag,
                 requestee=change_group['who'],
@@ -270,7 +273,7 @@ def get_bug(bug_id, node):
                 attachment = find_attachment(bug_data,
                                              change['attachment_id'])
                 if not attachment:
-                    raise Exception(f'attach {change["attachment_id"]}')
+                    raise CommitException(f'attach {change["attachment_id"]}')
                 attachment['status'].append(dict(
                     status=status,
                     timestamp=change_group['when'],
@@ -317,6 +320,19 @@ def get_commit_data(node):
         f'https://hg.mozilla.org/mozilla-central/json-rev/{node}',
         f'{node}-hg')
     rev['summary'] = rev['desc'].splitlines()[0]
+
+    # bug-id
+    bug_ids = parse_bug_ids(rev['summary'])
+    if len(bug_ids) == 0:
+        raise CommitException(f'failed to find bug-id in: {rev["summary"]}')
+    if len(bug_ids) > 1:
+        raise CommitException(f'found multiple bug-ids in: {rev["summary"]}')
+    bug_id = bug_ids[0]
+
+    # check bug data and fetch if necessary
+    if bug_id not in bugs:
+        bugs[bug_id] = get_bug(bug_id, node)
+
     rev['user'] = parseaddr(rev['user'])[1]
 
     if rev['backedoutby']:
@@ -333,17 +349,6 @@ def get_commit_data(node):
     patch = http_get(
         f'https://hg.mozilla.org/mozilla-central/raw-rev/{node}',
         f'{node}-patch', is_json=False)
-
-    # bug-id
-    bug_ids = parse_bug_ids(rev['summary'])
-    if len(bug_ids) == 0:
-        raise Exception(f'failed to find bug-id in: {rev["summary"]}')
-    if len(bug_ids) > 1:
-        raise Exception(f'found multiple bug-ids in: {rev["summary"]}')
-    bug_id = bug_ids[0]
-
-    if bug_id not in bugs:
-        bugs[bug_id] = get_bug(bug_id, node)
 
     # calc stats
 
@@ -389,7 +394,10 @@ def get_commit_data(node):
 def main(revs):
     try:
         for rev in revs:
-            get_commit_data(rev)
+            try:
+                get_commit_data(rev)
+            except CommitException as e:
+                print(f'Exception getting commit data: {e}', file=sys.stderr)
     except KeyboardInterrupt:
         pass
 
