@@ -22,6 +22,10 @@ ATTACHMENT_TYPE_GITHUB = 'text/x-github-request'
 ATTACHMENT_TYPE_PHABRICATOR = 'text/x-phabricator-request'
 
 
+class CommitException(Exception):
+    pass
+
+
 def parse_bug_ids(s):
     bug_id_re = re.compile(
         r'((?:bug|(?=\b#?\d{5,})|^(?=\d))(?:\s*#?)(\d+)(?=\b))', re.I)
@@ -58,8 +62,8 @@ def add_attachment_flag(stats, change_group, change, flagtype):
         if flag.startswith(f'{flagtype}?('):
             attachment = find_attachment(stats, change['attachment_id'])
             if not attachment:
-                raise Exception(f'attachment {change["attachment_id"]} '
-                                'not found')
+                raise CommitException(f'attachment {change["attachment_id"]} '
+                                      'not found')
             requestee = flag[len(f'{flagtype}?('):-1]
             attachment['status'].append(dict(
                 status=f'{flagtype}?',
@@ -74,8 +78,8 @@ def add_attachment_flag(stats, change_group, change, flagtype):
         elif flag == f'{flagtype}+' or flag == f'{flagtype}-':
             attachment = find_attachment(stats, change['attachment_id'])
             if not attachment:
-                raise Exception(f'attachment {change["attachment_id"]}'
-                                'not found')
+                raise CommitException(f'attachment {change["attachment_id"]}'
+                                      'not found')
             attachment['status'].append(dict(
                 status=flag,
                 requestee=change_group['who'],
@@ -173,9 +177,9 @@ def main(node):
     # bug-id
     bug_ids = parse_bug_ids(rev['summary'])
     if len(bug_ids) == 0:
-        raise Exception(f'failed to find bug-id in: {rev["summary"]}')
+        raise CommitException(f'failed to find bug-id in: {rev["summary"]}')
     if len(bug_ids) > 1:
-        raise Exception(f'found multiple bug-ids in: {rev["summary"]}')
+        raise CommitException(f'found multiple bug-ids in: {rev["summary"]}')
     bug_id = bug_ids[0]
 
     # bug - meta
@@ -316,7 +320,7 @@ def main(node):
 
                 attachment = find_attachment(stats, change['attachment_id'])
                 if not attachment:
-                    raise Exception(f'attach {change["attachment_id"]}')
+                    raise CommitException(f'attach {change["attachment_id"]}')
                 attachment['status'].append(dict(
                     status=status,
                     timestamp=change_group['when'],
@@ -379,12 +383,14 @@ def main(node):
     # display
     print(json.dumps(stats, indent=2, sort_keys=True))
 
-
 try:
     if len(sys.argv) == 1:
         raise Exception('syntax: commit-data.py <rev>[..]')
     for rev_arg in sys.argv[1:]:
-        main(rev_arg)
+        try:
+            main(rev_arg)
+        except CommitException as e:
+            print(f'Exception getting commit data: {e}', file=sys.stderr)
 except KeyboardInterrupt:
     pass
 
